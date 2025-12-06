@@ -1,0 +1,77 @@
+# Shadow Environment Docker Compose Stack
+# Creates ISOLATED development environment with local git server (Gitea)
+#
+# ISOLATION: The workspace is copied INTO the container, not mounted.
+# Changes inside the shadow do NOT affect the host filesystem.
+# Use `amplifier-shadow promote` to copy changes back when ready.
+#
+# Usage:
+#   amplifier-shadow start [name]     # Start and copy workspace in
+#   amplifier-shadow shell [name]     # Enter the isolated workspace
+#   amplifier-shadow diff [name]      # See what changed
+#   amplifier-shadow promote [name]   # Copy changes back to host
+#
+# Environment Variables:
+#   SHADOW_NAME     - Unique name for this shadow environment (default: default)
+#   GITEA_PORT      - Port for Gitea web UI (default: 3000)
+
+services:
+  gitea:
+    image: gitea/gitea:latest
+    container_name: ${SHADOW_NAME:-shadow}-gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__server__ROOT_URL=http://gitea:3000/
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__service__DISABLE_REGISTRATION=false
+      - GITEA__service__REQUIRE_SIGNIN_VIEW=false
+    volumes:
+      - gitea-data:/data
+    ports:
+      - "${GITEA_PORT:-3000}:3000"
+    networks:
+      - shadow-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  workspace:
+    build:
+      context: .
+      dockerfile: Dockerfile.workspace
+    container_name: ${SHADOW_NAME:-shadow}-workspace
+    volumes:
+      # Isolated workspace volume (NOT mounted to host)
+      # Files are copied in via `docker cp` after container starts
+      - workspace-data:/workspace
+      # Docker socket for nested operations (build/push within shadow)
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - AMPLIFIER_GIT_HOST=http://gitea:3000
+      - AMPLIFIER_SHADOW_MODE=true
+      - SHADOW_NAME=${SHADOW_NAME:-default}
+    depends_on:
+      gitea:
+        condition: service_healthy
+    networks:
+      - shadow-net
+    working_dir: /workspace
+    # Keep container running for interactive use
+    command: sleep infinity
+    stdin_open: true
+    tty: true
+
+networks:
+  shadow-net:
+    driver: bridge
+    name: ${SHADOW_NAME:-shadow}-net
+
+volumes:
+  gitea-data:
+    name: ${SHADOW_NAME:-shadow}-gitea-data
+  workspace-data:
+    name: ${SHADOW_NAME:-shadow}-workspace-data

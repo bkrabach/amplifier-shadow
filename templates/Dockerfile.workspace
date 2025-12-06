@@ -1,0 +1,27 @@
+# Amplifier Shadow Workspace Container
+# Provides Python development environment with uv and Docker CLI
+
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    ca-certificates \
+    docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv package manager
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+# Configure git for shadow operations
+RUN git config --global user.email "shadow@amplifier.local" \
+    && git config --global user.name "Shadow Environment" \
+    && git config --global init.defaultBranch main
+
+# Set up workspace directory
+WORKDIR /workspace
+
+# Default command keeps container running
+CMD ["sleep", "infinity"]
