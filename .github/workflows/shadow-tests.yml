@@ -1,0 +1,115 @@
+# Shadow Environment Tests
+#
+# Tests remote install functionality using shadow environments.
+# Validates that git+https://github.com/... URLs work correctly when
+# AMPLIFIER_GIT_HOST environment variable redirects to local Gitea server.
+#
+# This workflow runs on:
+# - Push to main/next branches
+# - Pull requests
+# - Manual trigger (workflow_dispatch)
+
+name: Shadow Environment Tests
+
+on:
+  push:
+    branches: [main, next]
+    paths:
+      - "amplifier-module-resolution/**"
+      - "amplifier-collections/**"
+      - "amplifier-profiles/**"
+      - "amplifier-shadow/**"
+      - ".github/workflows/shadow-tests.yml"
+  pull_request:
+    branches: [main, next]
+    paths:
+      - "amplifier-module-resolution/**"
+      - "amplifier-collections/**"
+      - "amplifier-profiles/**"
+      - "amplifier-shadow/**"
+      - ".github/workflows/shadow-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  shadow-tests:
+    name: Shadow Environment Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start shadow environment
+        run: |
+          cd amplifier-shadow
+          ./scripts/init-shadow.sh
+        timeout-minutes: 5
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for Gitea to be fully ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:3000/api/v1/version > /dev/null; then
+              echo "Gitea is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+      - name: Publish modules to shadow
+        run: |
+          # Publish essential modules for testing
+          MODULES=(
+            "amplifier-module-resolution"
+            "amplifier-module-loop-basic"
+            "amplifier-module-context-simple"
+            "amplifier-module-provider-mock"
+            "amplifier-collections"
+            "amplifier-collection-recipes"
+          )
+
+          for module in "${MODULES[@]}"; do
+            if [ -d "$module" ]; then
+              echo "Publishing $module..."
+              ./amplifier-shadow/scripts/publish-module.sh "$module" || true
+            fi
+          done
+
+      - name: Install dependencies in workspace
+        run: |
+          docker compose -f amplifier-shadow/templates/docker-compose.yaml exec -T workspace bash -c '
+            uv pip install --system --quiet \
+              "git+http://gitea:3000/amplifier/amplifier-module-resolution.git@main"
+          '
+
+      - name: Run Phase 0.4 - Profile Loading Tests
+        run: |
+          docker compose -f amplifier-shadow/templates/docker-compose.yaml exec -T workspace \
+            python3 /workspace/amplifier-shadow/tests/test_profile_loading.py
+
+      - name: Run Phase 0.5 - Collection Tests
+        run: |
+          docker compose -f amplifier-shadow/templates/docker-compose.yaml exec -T workspace \
+            python3 /workspace/amplifier-shadow/tests/test_collection_install.py
+
+      - name: Stop shadow environment
+        if: always()
+        run: |
+          cd amplifier-shadow
+          ./scripts/stop-shadow.sh || true
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Gitea logs ==="
+          docker logs default-gitea 2>&1 | tail -100 || true
+          echo ""
+          echo "=== Workspace logs ==="
+          docker logs default-workspace 2>&1 | tail -100 || true
