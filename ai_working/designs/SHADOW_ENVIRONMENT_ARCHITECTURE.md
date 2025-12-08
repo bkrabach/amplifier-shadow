@@ -26,7 +26,7 @@ Shadow environments are the foundational unlock for:
 
 ### The Dream State
 
-> "Personally no longer using Amplifier v1, instead doing all Amplifier 'next' dev through a system that works at the task-level - directing requests/feedback at the chat level, not lower."
+> "Personally no longer using Amplifier on Claude, instead doing all Amplifier dev through a system that works at the task-level - directing requests/feedback at the chat level, not lower."
 
 ### Core Requirements
 
@@ -501,15 +501,16 @@ workspace:
 
 **This means:**
 
-| Operation | Outer Recipe (Host) | Inner Amplifier (Shadow) |
-|-----------|---------------------|--------------------------|
-| Read file | `gateway.exec("cat ...")` | Normal file tool |
-| Write file | `gateway.exec("echo ...")` | Normal file tool |
-| Run command | `gateway.exec()` (docker exec) | Normal bash tool |
-| See changes | `gateway.diff()` | N/A (works inside) |
-| Apply changes | `gateway.promote()` | N/A (host operation) |
+| Operation     | Outer Recipe (Host)            | Inner Amplifier (Shadow) |
+| ------------- | ------------------------------ | ------------------------ |
+| Read file     | `gateway.exec("cat ...")`      | Normal file tool         |
+| Write file    | `gateway.exec("echo ...")`     | Normal file tool         |
+| Run command   | `gateway.exec()` (docker exec) | Normal bash tool         |
+| See changes   | `gateway.diff()`               | N/A (works inside)       |
+| Apply changes | `gateway.promote()`            | N/A (host operation)     |
 
 **Key insight**: Changes are **isolated until explicitly promoted**:
+
 - Inner Amplifier can modify, delete, experiment freely
 - Host workspace remains unchanged until `promote()`
 - Use `diff()` to see what changed before promoting
@@ -778,17 +779,17 @@ Scenario recipes don't need special "shadow-aware" tools. They just use normal A
 
 Shadow management recipes use these actions:
 
-| Action | Description | Example |
-|--------|-------------|---------|
-| `shadow.create` | Create new shadow environment | `name: "test-foo"` |
-| `shadow.destroy` | Destroy shadow environment | `name: "test-foo"` |
-| `shadow.sync` | Sync modules to Gitea | `modules: all` or `["core", "cli"]` |
-| `shadow.exec` | Execute command in shadow | `command: "make test"` |
-| `shadow.amplifier` | Run Amplifier prompt in shadow | `prompt: "help me"` |
-| `shadow.run_recipe` | Run recipe inside shadow | `recipe: "scenario.yaml"` |
-| `shadow.read_file` | Read file from shadow | `path: "/workspace/x.json"` |
-| `shadow.write_file` | Write file to shadow | `path: "...", content: "..."` |
-| `shadow.promote` | Push changes to real remote | `to_branch: "pr/feature"` |
+| Action              | Description                    | Example                             |
+| ------------------- | ------------------------------ | ----------------------------------- |
+| `shadow.create`     | Create new shadow environment  | `name: "test-foo"`                  |
+| `shadow.destroy`    | Destroy shadow environment     | `name: "test-foo"`                  |
+| `shadow.sync`       | Sync modules to Gitea          | `modules: all` or `["core", "cli"]` |
+| `shadow.exec`       | Execute command in shadow      | `command: "make test"`              |
+| `shadow.amplifier`  | Run Amplifier prompt in shadow | `prompt: "help me"`                 |
+| `shadow.run_recipe` | Run recipe inside shadow       | `recipe: "scenario.yaml"`           |
+| `shadow.read_file`  | Read file from shadow          | `path: "/workspace/x.json"`         |
+| `shadow.write_file` | Write file to shadow           | `path: "...", content: "..."`       |
+| `shadow.promote`    | Push changes to real remote    | `to_branch: "pr/feature"`           |
 
 ---
 
@@ -1066,6 +1067,7 @@ Docker volumes persist after `amplifier-shadow stop` (without `--volumes`). User
 **Implemented commands**:
 
 1. **`amplifier-shadow volumes`** ✅
+
    - Lists all Docker volumes associated with shadow environments
    - Shows which are associated with active/known shadows vs orphaned
    - Displays volume status (active vs orphaned)
@@ -1077,6 +1079,7 @@ Docker volumes persist after `amplifier-shadow stop` (without `--volumes`). User
    - Also cleans up orphaned snapshots in `~/.amplifier/shadow-snapshots/`
 
 **Implementation**:
+
 - Queries Docker for volumes matching `amplifier-shadow-*` pattern
 - Cross-references with saved configs in `~/.amplifier/shadow-config/`
 - Cleans up orphaned snapshots that lack corresponding configs
@@ -1128,6 +1131,7 @@ The Devcontainer + Compose + Gitea approach scored highest (33/40) with best bal
 ### Phase 0 Complete ✅
 
 Phase 0 infrastructure is complete:
+
 - CLI wrapper (`amplifier-shadow`) with all lifecycle commands
 - `ShadowGateway` Python API for programmatic control
 - Pure Python implementation (no shell script dependencies)
