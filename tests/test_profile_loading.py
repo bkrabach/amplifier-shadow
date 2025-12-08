@@ -9,6 +9,22 @@ shadow Gitea server instead.
 import os
 import sys
 
+import pytest
+
+
+def _gitea_available() -> bool:
+    """Check if Gitea is available (shadow environment running)."""
+    import socket
+
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex(("localhost", 3000))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
+
 
 def test_gitsource_rewriting():
     """Test that GitSource rewrites URLs when AMPLIFIER_GIT_HOST is set."""
@@ -34,9 +50,9 @@ def test_gitsource_rewriting():
 
     assert effective_url == expected, f"Expected {expected}, got {effective_url}"
     print("  ✅ PASS: URL correctly rewritten for shadow")
-    return True
 
 
+@pytest.mark.skipif(not _gitea_available(), reason="Requires running shadow environment with Gitea")
 def test_module_download_from_shadow():
     """Test that modules are actually downloaded from shadow Gitea."""
     from amplifier_module_resolution.sources import GitSource
@@ -49,26 +65,18 @@ def test_module_download_from_shadow():
     print("\nTest: Module Download from Shadow")
     print(f"  Resolving: {source.url}@{source.ref}")
 
-    try:
-        path = source.resolve()
-        print(f"  Downloaded to: {path}")
+    path = source.resolve()
+    print(f"  Downloaded to: {path}")
 
-        # Verify it has Python files
-        py_files = list(path.glob("**/*.py"))
-        print(f"  Found {len(py_files)} Python files")
+    # Verify it has Python files
+    py_files = list(path.glob("**/*.py"))
+    print(f"  Found {len(py_files)} Python files")
 
-        assert len(py_files) > 0, "No Python files found in downloaded module"
-        print("  ✅ PASS: Module downloaded successfully from shadow!")
-        return True
-
-    except Exception as e:
-        print(f"  ❌ FAIL: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return False
+    assert len(py_files) > 0, "No Python files found in downloaded module"
+    print("  ✅ PASS: Module downloaded successfully from shadow!")
 
 
+@pytest.mark.skipif(not _gitea_available(), reason="Requires running shadow environment with Gitea")
 def test_resolver_with_profile_hint():
     """Test that StandardModuleSourceResolver uses profile hint with rewriting."""
     from amplifier_module_resolution.resolvers import StandardModuleSourceResolver
@@ -85,44 +93,33 @@ def test_resolver_with_profile_hint():
     print("  Module ID: context-simple")
     print(f"  Profile hint: {profile_hint}")
 
-    try:
-        # The resolver should use the profile hint and GitSource should rewrite
-        result = resolver.resolve("context-simple", profile_hint=profile_hint)
+    # The resolver should use the profile hint and GitSource should rewrite
+    result = resolver.resolve("context-simple", profile_hint=profile_hint)
 
-        if result:
-            print(f"  Resolved to: {result}")
+    assert result is not None, "Resolver returned None"
+    print(f"  Resolved to: {result}")
 
-            # If result is a GitSource, resolve it to get the path
-            if isinstance(result, GitSource):
-                # Check that URL rewriting is applied
-                effective_url = result._get_effective_url()  # type: ignore[attr-defined]
-                print(f"  Effective URL: {effective_url}")
-                assert "gitea:3000" in effective_url, "URL not rewritten for shadow"
+    # If result is a GitSource, resolve it to get the path
+    if isinstance(result, GitSource):
+        # Check that URL rewriting is applied
+        effective_url = result._get_effective_url()  # type: ignore[attr-defined]
+        print(f"  Effective URL: {effective_url}")
+        assert "gitea:3000" in effective_url, "URL not rewritten for shadow"
 
-                # Resolve to path
-                path = result.resolve()
-                print(f"  Downloaded to: {path}")
-                py_files = list(path.glob("**/*.py"))
-            else:
-                # Result is already a path
-                py_files = list(result.glob("**/*.py"))
+        # Resolve to path
+        path = result.resolve()
+        print(f"  Downloaded to: {path}")
+        py_files = list(path.glob("**/*.py"))
+    else:
+        # Result is already a path
+        py_files = list(result.glob("**/*.py"))
 
-            print(f"  Found {len(py_files)} Python files")
-            assert len(py_files) > 0, "No Python files found"
-            print("  ✅ PASS: Resolver used profile hint with shadow rewriting!")
-            return True
-        else:
-            print("  ❌ FAIL: Resolver returned None")
-            return False
-
-    except Exception as e:
-        print(f"  ❌ FAIL: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return False
+    print(f"  Found {len(py_files)} Python files")
+    assert len(py_files) > 0, "No Python files found"
+    print("  ✅ PASS: Resolver used profile hint with shadow rewriting!")
 
 
+@pytest.mark.skipif(not _gitea_available(), reason="Requires running shadow environment with Gitea")
 def test_provider_module():
     """Test provider module can be downloaded from shadow."""
     from amplifier_module_resolution.sources import GitSource
@@ -134,24 +131,15 @@ def test_provider_module():
     print("\nTest: Provider Module from Shadow")
     print(f"  Resolving: {source.url}@{source.ref}")
 
-    try:
-        path = source.resolve()
-        print(f"  Downloaded to: {path}")
+    path = source.resolve()
+    print(f"  Downloaded to: {path}")
 
-        # Check for provider module structure
-        py_files = list(path.glob("**/*.py"))
-        print(f"  Found {len(py_files)} Python files")
+    # Check for provider module structure
+    py_files = list(path.glob("**/*.py"))
+    print(f"  Found {len(py_files)} Python files")
 
-        assert len(py_files) > 0, "No Python files found"
-        print("  ✅ PASS: Provider module downloaded from shadow!")
-        return True
-
-    except Exception as e:
-        print(f"  ❌ FAIL: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return False
+    assert len(py_files) > 0, "No Python files found"
+    print("  ✅ PASS: Provider module downloaded from shadow!")
 
 
 def main():

@@ -5,16 +5,32 @@ This test validates that when AMPLIFIER_GIT_HOST is set, collections installed
 via git+https://github.com/... URLs are downloaded from the shadow Gitea server.
 """
 
+import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+import pytest
 
+
+def _gitea_available() -> bool:
+    """Check if Gitea is available (shadow environment running)."""
+    import socket
+
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex(("localhost", 3000))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(not _gitea_available(), reason="Requires running shadow environment with Gitea")
 def test_gitsource_install_to():
     """Test that GitSource.install_to() uses shadow URL rewriting."""
-    import asyncio
-
     from amplifier_module_resolution.sources import GitSource
 
     os.environ["AMPLIFIER_GIT_HOST"] = "http://gitea:3000"
@@ -36,31 +52,21 @@ def test_gitsource_install_to():
         target = Path(tmpdir) / "test-install"
         print(f"  Installing to: {target}")
 
-        try:
-            # Run the async install
-            asyncio.run(source.install_to(target))
+        # Run the async install
+        asyncio.run(source.install_to(target))
 
-            # Verify installation
-            assert target.exists(), "Target directory not created"
-            py_files = list(target.glob("**/*.py"))
-            print(f"  Found {len(py_files)} Python files")
-            assert len(py_files) > 0, "No Python files installed"
+        # Verify installation
+        assert target.exists(), "Target directory not created"
+        py_files = list(target.glob("**/*.py"))
+        print(f"  Found {len(py_files)} Python files")
+        assert len(py_files) > 0, "No Python files installed"
 
-            print("  ✅ PASS: install_to() worked with shadow rewriting!")
-            return True
-
-        except Exception as e:
-            print(f"  ❌ FAIL: {e}")
-            import traceback
-
-            traceback.print_exc()
-            return False
+        print("  ✅ PASS: install_to() worked with shadow rewriting!")
 
 
+@pytest.mark.skipif(not _gitea_available(), reason="Requires running shadow environment with Gitea")
 def test_collection_like_install():
     """Test a collection-style installation pattern."""
-    import asyncio
-
     from amplifier_module_resolution.sources import GitSource
 
     os.environ["AMPLIFIER_GIT_HOST"] = "http://gitea:3000"
@@ -71,41 +77,31 @@ def test_collection_like_install():
     print("\nTest: Collection-Style Installation")
     print(f"  Collection URL: {collection_url}")
 
-    try:
-        source = GitSource.from_uri(collection_url)
-        effective = source._get_effective_url()  # type: ignore[attr-defined]
-        print(f"  Effective URL: {effective}")
+    source = GitSource.from_uri(collection_url)
+    effective = source._get_effective_url()  # type: ignore[attr-defined]
+    print(f"  Effective URL: {effective}")
 
-        assert "gitea:3000" in effective, f"URL not rewritten: {effective}"
-        print("  ✅ URL correctly rewritten for shadow")
+    assert "gitea:3000" in effective, f"URL not rewritten: {effective}"
+    print("  ✅ URL correctly rewritten for shadow")
 
-        # Install to temp directory
-        with tempfile.TemporaryDirectory() as tmpdir:
-            target = Path(tmpdir) / "collection-test"
-            print(f"  Installing to: {target}")
+    # Install to temp directory
+    with tempfile.TemporaryDirectory() as tmpdir:
+        target = Path(tmpdir) / "collection-test"
+        print(f"  Installing to: {target}")
 
-            asyncio.run(source.install_to(target))
+        asyncio.run(source.install_to(target))
 
-            assert target.exists(), "Collection not installed"
+        assert target.exists(), "Collection not installed"
 
-            # Collections typically have profiles/ or modules/ directories
-            contents = list(target.iterdir())
-            print(f"  Installed contents: {[c.name for c in contents[:5]]}...")
+        # Collections typically have profiles/ or modules/ directories
+        contents = list(target.iterdir())
+        print(f"  Installed contents: {[c.name for c in contents[:5]]}...")
 
-            print("  ✅ PASS: Collection installed from shadow!")
-            return True
-
-    except Exception as e:
-        print(f"  ❌ FAIL: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return False
+        print("  ✅ PASS: Collection installed from shadow!")
 
 
 def test_multiple_modules_install():
     """Test installing multiple modules (simulating collection with dependencies)."""
-
     from amplifier_module_resolution.sources import GitSource
 
     os.environ["AMPLIFIER_GIT_HOST"] = "http://gitea:3000"
@@ -118,7 +114,6 @@ def test_multiple_modules_install():
 
     print("\nTest: Multiple Modules Installation")
 
-    results = []
     for module_url in modules:
         source = GitSource.from_uri(module_url)
         effective = source._get_effective_url()  # type: ignore[attr-defined]
@@ -128,19 +123,10 @@ def test_multiple_modules_install():
         print(f"  {module_name}:")
         print(f"    Effective: {effective}")
 
-        if "gitea:3000" in effective:
-            results.append(True)
-            print("    ✅ URL rewritten")
-        else:
-            results.append(False)
-            print(f"    ❌ URL not rewritten: {effective}")
+        assert "gitea:3000" in effective, f"URL not rewritten for {module_name}: {effective}"
+        print("    ✅ URL rewritten")
 
-    if all(results):
-        print("  ✅ PASS: All modules use shadow URLs!")
-        return True
-    else:
-        print("  ❌ FAIL: Some modules not rewritten")
-        return False
+    print("  ✅ PASS: All modules use shadow URLs!")
 
 
 def test_uri_property_preserved():
@@ -160,7 +146,6 @@ def test_uri_property_preserved():
     # NOT the rewritten URL
     assert source.uri == original_uri, f"URI changed: {source.uri}"
     print("  ✅ PASS: URI preserved (for lock file recording)")
-    return True
 
 
 def main():

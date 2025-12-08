@@ -1057,29 +1057,29 @@ This avoids modifying existing URL parsing logic.
 
 ---
 
-## Near-Term TODOs
+## Completed TODOs
 
-### Volume/Data Cleanup Commands
+### Volume/Data Cleanup Commands ✅
 
 Docker volumes persist after `amplifier-shadow stop` (without `--volumes`). Users may accumulate orphaned volumes from deleted/renamed shadow environments that no longer appear in `amplifier-shadow list` but still consume disk space.
 
-**Needed commands**:
+**Implemented commands**:
 
-1. **`amplifier-shadow volumes`** (or `amplifier-shadow list --volumes`)
-   - List all Docker volumes associated with shadow environments
-   - Show which are associated with active/known shadows vs orphaned
-   - Display disk space usage per volume
+1. **`amplifier-shadow volumes`** ✅
+   - Lists all Docker volumes associated with shadow environments
+   - Shows which are associated with active/known shadows vs orphaned
+   - Displays volume status (active vs orphaned)
 
-2. **`amplifier-shadow cleanup`** (or `amplifier-shadow prune`)
-   - Remove orphaned volumes (not associated with any shadow in list)
-   - Optionally remove all shadow volumes (`--all`)
+2. **`amplifier-shadow cleanup`** ✅
+   - Removes orphaned volumes (not associated with any shadow in list)
+   - `--all` flag to remove all shadow volumes
    - Interactive confirmation by default, `--force` to skip
-   - Report space reclaimed
+   - Also cleans up orphaned snapshots in `~/.amplifier/shadow-snapshots/`
 
-**Implementation notes**:
-- Query Docker for volumes matching `amplifier-shadow-*` pattern
-- Cross-reference with saved configs in `~/.amplifier/shadow-config/`
-- Also clean up orphaned snapshots in `~/.amplifier/shadow-snapshots/`
+**Implementation**:
+- Queries Docker for volumes matching `amplifier-shadow-*` pattern
+- Cross-references with saved configs in `~/.amplifier/shadow-config/`
+- Cleans up orphaned snapshots that lack corresponding configs
 
 ---
 

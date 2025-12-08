@@ -187,6 +187,215 @@ def list_shadows() -> None:
             click.echo(f"  {icon} {name}: {status}")
 
 
+def _get_shadow_volumes() -> list[dict]:
+    """Get all Docker volumes associated with shadow environments.
+
+    Returns list of dicts with keys: name, shadow_name, size, orphaned
+    """
+    # Get all volumes with amplifier-shadow prefix
+    result = subprocess.run(
+        ["docker", "volume", "ls", "--format", "{{.Name}}"],
+        capture_output=True,
+        text=True,
+    )
+
+    if not result.stdout.strip():
+        return []
+
+    volumes = []
+    known_shadows = _get_known_shadows()
+
+    for vol_name in result.stdout.strip().split("\n"):
+        if not vol_name.startswith("amplifier-shadow-"):
+            continue
+
+        # Extract shadow name from volume name
+        # Format: amplifier-shadow-{name}_{type} (e.g., amplifier-shadow-default_workspace)
+        parts = vol_name.replace("amplifier-shadow-", "").rsplit("_", 1)
+        shadow_name = parts[0] if parts else "unknown"
+
+        # Get volume size
+        inspect_result = subprocess.run(
+            ["docker", "system", "df", "-v", "--format", "{{.Name}}\t{{.Size}}"],
+            capture_output=True,
+            text=True,
+        )
+
+        size = "unknown"
+        for line in inspect_result.stdout.strip().split("\n"):
+            if vol_name in line:
+                size_parts = line.split("\t")
+                if len(size_parts) >= 2:
+                    size = size_parts[1]
+                break
+
+        volumes.append(
+            {
+                "name": vol_name,
+                "shadow_name": shadow_name,
+                "size": size,
+                "orphaned": shadow_name not in known_shadows,
+            }
+        )
+
+    return volumes
+
+
+def _get_known_shadows() -> set[str]:
+    """Get set of shadow names that have saved configs."""
+    config_dir = Path.home() / ".amplifier" / "shadow-config"
+    if not config_dir.exists():
+        return set()
+
+    shadows = set()
+    for config_file in config_dir.glob("*.json"):
+        shadows.add(config_file.stem)
+    return shadows
+
+
+def _get_orphaned_snapshots() -> list[Path]:
+    """Get snapshot directories that don't have corresponding configs."""
+    snapshot_dir = Path.home() / ".amplifier" / "shadow-snapshots"
+    if not snapshot_dir.exists():
+        return []
+
+    known_shadows = _get_known_shadows()
+    orphaned = []
+
+    for snapshot in snapshot_dir.iterdir():
+        if snapshot.is_dir() and snapshot.name not in known_shadows:
+            orphaned.append(snapshot)
+
+    return orphaned
+
+
+@main.command()
+def volumes() -> None:
+    """List Docker volumes associated with shadow environments.
+
+    Shows all volumes, their associated shadow environment, size,
+    and whether they are orphaned (no corresponding shadow config).
+    """
+    vols = _get_shadow_volumes()
+
+    if not vols:
+        click.echo("No shadow volumes found.")
+        return
+
+    click.echo("Shadow Volumes:")
+    click.echo("-" * 60)
+
+    orphaned_count = 0
+    for vol in vols:
+        status = "orphaned" if vol["orphaned"] else "active"
+        if vol["orphaned"]:
+            orphaned_count += 1
+        icon = "⚠" if vol["orphaned"] else "●"
+        click.echo(f"  {icon} {vol['name']}")
+        click.echo(f"      Shadow: {vol['shadow_name']} ({status})")
+        click.echo(f"      Size: {vol['size']}")
+
+    # Also show orphaned snapshots
+    orphaned_snapshots = _get_orphaned_snapshots()
+
+    click.echo()
+    click.echo("Summary:")
+    click.echo(f"  Total volumes: {len(vols)}")
+    click.echo(f"  Orphaned volumes: {orphaned_count}")
+    click.echo(f"  Orphaned snapshots: {len(orphaned_snapshots)}")
+
+    if orphaned_count > 0 or orphaned_snapshots:
+        click.echo()
+        click.echo("Run 'amplifier-shadow cleanup' to remove orphaned data.")
+
+
+@main.command()
+@click.option(
+    "--all",
+    "remove_all",
+    is_flag=True,
+    help="Remove ALL shadow volumes (not just orphaned)",
+)
+@click.option(
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Skip confirmation prompt",
+)
+def cleanup(remove_all: bool, force: bool) -> None:
+    """Remove orphaned shadow volumes and snapshots.
+
+    By default, only removes volumes/snapshots that don't have a
+    corresponding shadow configuration. Use --all to remove everything.
+    """
+    import shutil
+
+    vols = _get_shadow_volumes()
+    orphaned_snapshots = _get_orphaned_snapshots()
+
+    # Filter volumes based on --all flag
+    if remove_all:
+        volumes_to_remove = [v["name"] for v in vols]
+    else:
+        volumes_to_remove = [v["name"] for v in vols if v["orphaned"]]
+
+    snapshots_to_remove = orphaned_snapshots if not remove_all else []
+    if remove_all:
+        snapshot_dir = Path.home() / ".amplifier" / "shadow-snapshots"
+        if snapshot_dir.exists():
+            snapshots_to_remove = list(snapshot_dir.iterdir())
+
+    if not volumes_to_remove and not snapshots_to_remove:
+        click.echo("Nothing to clean up.")
+        return
+
+    # Show what will be removed
+    click.echo("The following will be removed:")
+    if volumes_to_remove:
+        click.echo(f"\n  Volumes ({len(volumes_to_remove)}):")
+        for vol in volumes_to_remove:
+            click.echo(f"    - {vol}")
+
+    if snapshots_to_remove:
+        click.echo(f"\n  Snapshots ({len(snapshots_to_remove)}):")
+        for snap in snapshots_to_remove:
+            click.echo(f"    - {snap.name}")
+
+    click.echo()
+
+    if not force:
+        if not click.confirm("Proceed with cleanup?"):
+            click.echo("Aborted.")
+            return
+
+    # Remove volumes
+    removed_volumes = 0
+    for vol in volumes_to_remove:
+        result = subprocess.run(
+            ["docker", "volume", "rm", vol],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            removed_volumes += 1
+            click.echo(f"  Removed volume: {vol}")
+        else:
+            click.echo(f"  Failed to remove {vol}: {result.stderr.strip()}", err=True)
+
+    # Remove snapshots
+    removed_snapshots = 0
+    for snap in snapshots_to_remove:
+        try:
+            shutil.rmtree(snap)
+            removed_snapshots += 1
+            click.echo(f"  Removed snapshot: {snap.name}")
+        except Exception as e:
+            click.echo(f"  Failed to remove {snap.name}: {e}", err=True)
+
+    click.echo()
+    click.echo(f"Cleanup complete: {removed_volumes} volumes, {removed_snapshots} snapshots removed.")
+
+
 @main.command()
 @click.argument("name", default="default")
 def shell(name: str) -> None:
