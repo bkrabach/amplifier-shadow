@@ -127,6 +127,12 @@ amplifier-shadow list
 
 # Show platform information
 amplifier-shadow platform
+
+# List shadow volumes (including orphaned)
+amplifier-shadow volumes
+
+# Remove orphaned volumes and snapshots
+amplifier-shadow cleanup [--all] [--force]
 ```
 
 ### Workspace Interaction
