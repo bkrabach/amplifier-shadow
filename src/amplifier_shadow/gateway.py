@@ -34,7 +34,7 @@ class ExecResult:
 
 def _get_shadow_config_dir() -> Path:
     """Get the directory for shadow configuration files."""
-    base_dir = Path.home() / ".amplifier" / "shadow-config"
+    base_dir = Path.home() / ".amplifier" / "shadow" / "config"
     base_dir.mkdir(parents=True, exist_ok=True)
     return base_dir
 
@@ -292,9 +292,9 @@ class ShadowGateway:
     def token_file(self) -> Path:
         """Path to API token file for this shadow.
 
-        Stored in ~/.amplifier/shadow-tokens/ to avoid being inside any workspace.
+        Stored in ~/.amplifier/shadow/tokens/ to avoid being inside any workspace.
         """
-        base_dir = Path.home() / ".amplifier" / "shadow-tokens"
+        base_dir = Path.home() / ".amplifier" / "shadow" / "tokens"
         base_dir.mkdir(parents=True, exist_ok=True)
         return base_dir / f"{self.shadow_name}"
 
@@ -628,10 +628,10 @@ class ShadowGateway:
     def snapshot_dir(self) -> Path:
         """Directory for storing original workspace snapshot.
 
-        Stored in ~/.amplifier/shadow-snapshots/ to avoid being inside any workspace.
+        Stored in ~/.amplifier/shadow/snapshots/ to avoid being inside any workspace.
         This prevents recursive copying when the workspace contains the snapshot.
         """
-        base_dir = Path.home() / ".amplifier" / "shadow-snapshots"
+        base_dir = Path.home() / ".amplifier" / "shadow" / "snapshots"
         base_dir.mkdir(parents=True, exist_ok=True)
         return base_dir / f"{self.shadow_name}"
 

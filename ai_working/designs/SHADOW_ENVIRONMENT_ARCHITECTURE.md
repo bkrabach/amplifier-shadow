@@ -1076,12 +1076,12 @@ Docker volumes persist after `amplifier-shadow stop` (without `--volumes`). User
    - Removes orphaned volumes (not associated with any shadow in list)
    - `--all` flag to remove all shadow volumes
    - Interactive confirmation by default, `--force` to skip
-   - Also cleans up orphaned snapshots in `~/.amplifier/shadow-snapshots/`
+   - Also cleans up orphaned snapshots in `~/.amplifier/shadow/snapshots/`
 
 **Implementation**:
 
 - Queries Docker for volumes matching `amplifier-shadow-*` pattern
-- Cross-references with saved configs in `~/.amplifier/shadow-config/`
+- Cross-references with saved configs in `~/.amplifier/shadow/config/`
 - Cleans up orphaned snapshots that lack corresponding configs
 
 ---

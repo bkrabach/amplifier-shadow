@@ -243,7 +243,7 @@ def _get_shadow_volumes() -> list[dict]:
 
 def _get_known_shadows() -> set[str]:
     """Get set of shadow names that have saved configs."""
-    config_dir = Path.home() / ".amplifier" / "shadow-config"
+    config_dir = Path.home() / ".amplifier" / "shadow" / "config"
     if not config_dir.exists():
         return set()
 
@@ -255,7 +255,7 @@ def _get_known_shadows() -> set[str]:
 
 def _get_orphaned_snapshots() -> list[Path]:
     """Get snapshot directories that don't have corresponding configs."""
-    snapshot_dir = Path.home() / ".amplifier" / "shadow-snapshots"
+    snapshot_dir = Path.home() / ".amplifier" / "shadow" / "snapshots"
     if not snapshot_dir.exists():
         return []
 
@@ -341,7 +341,7 @@ def cleanup(remove_all: bool, force: bool) -> None:
 
     snapshots_to_remove = orphaned_snapshots if not remove_all else []
     if remove_all:
-        snapshot_dir = Path.home() / ".amplifier" / "shadow-snapshots"
+        snapshot_dir = Path.home() / ".amplifier" / "shadow" / "snapshots"
         if snapshot_dir.exists():
             snapshots_to_remove = list(snapshot_dir.iterdir())
 
