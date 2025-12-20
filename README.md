@@ -218,7 +218,7 @@ After initializing Gitea:
 amplifier-shadow publish ./amplifier-module-foo
 
 # Or sync all amplifier-* modules
-amplifier-shadow sync --workspace /path/to/amplifier-dev
+amplifier-shadow sync --workspace /path/to/your-workspace
 ```
 
 Then install from shadow inside the workspace:
